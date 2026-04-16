@@ -386,6 +386,7 @@
             color: var(--text-dim);
             box-shadow: none;
         }
+        #result-display {
             margin-top: 12px;
             padding: 12px;
             border-radius: 2px;
@@ -702,7 +703,7 @@
     window.onload = () => {
         const saved = localStorage.getItem('dd_codename');
         if (saved) {
-            setCodename(saved);
+            setCodename(saved, true); // 初回復元時はスキップ、loadQuizzesで一緒に取得
         }
         loadQuizzes();
 
@@ -731,12 +732,17 @@
         localStorage.setItem('dd_codename', val);
     }
 
-    function setCodename(name) {
+    function setCodename(name, skipSync = false) {
         codename = name;
         document.getElementById('codename-setup').style.display = 'none';
         document.getElementById('agent-badge').style.display = 'block';
         document.getElementById('agent-name-display').innerText = name;
         document.getElementById('header-left-placeholder').style.display = 'none';
+        // コードネーム確定時点でクイズデータが揃っていれば即座にサーバーと solved を同期
+        if (!skipSync && quizData.length > 0) {
+            showCacheStatus('syncing', '↻ SYNCING...');
+            _fetchAndUpdate(true);
+        }
     }
 
     function resetCodename() {
@@ -794,6 +800,22 @@
         return (Date.now() - ts) > CACHE_TTL_MS;
     }
 
+    // ── SOLVED SYNC ──
+    // サーバーから受け取った solvedIds とローカルの dd_solved をマージする。
+    // どちらか片方にしかないIDも保持（ローカル先行正解 + デバイス間同期の両立）。
+    function mergeSolvedIds(serverIds) {
+        if (!Array.isArray(serverIds) || serverIds.length === 0) return;
+        const local = getSolvedSet();
+        let changed = false;
+        serverIds.forEach(id => {
+            const key = String(id);
+            if (!local.has(key)) { local.add(key); changed = true; }
+        });
+        if (changed) {
+            localStorage.setItem('dd_solved', JSON.stringify([...local]));
+        }
+    }
+
     function showCacheStatus(state, text, autohideMs = 0) {
         const el = document.getElementById('cache-status');
         el.className = 'show ' + state;
@@ -818,7 +840,9 @@
             showCacheStatus('cached', '▸ CACHED DATA');
 
             if (!cacheIsStale()) {
-                setTimeout(hideCacheStatus, 2000);
+                // キャッシュが新鮮でも codename があればバックグラウンドで solved を同期
+                if (codename) _fetchAndUpdate(true);
+                else setTimeout(hideCacheStatus, 2000);
                 return;
             }
 
@@ -832,32 +856,40 @@
     }
 
     async function _fetchAndUpdate(isBackground) {
+        // codename が確定していればクエリパラメータに付加してサーバー側 solvedIds を取得
+        const codenameParam = codename ? `&codename=${encodeURIComponent(codename)}` : '';
         try {
-            const response = await fetch(`${GAS_URL}?action=getQuizList`);
-            const data = await response.json();
+            const response = await fetch(`${GAS_URL}?action=getQuizList${codenameParam}`);
+            const raw = await response.json();
 
-            if (!Array.isArray(data) || data.length === 0) {
+            // 新レスポンス形式 { quizzes, solvedIds } と旧形式（配列）の両方に対応
+            const quizList = Array.isArray(raw) ? raw : raw.quizzes;
+            const solvedIds = Array.isArray(raw) ? [] : (raw.solvedIds || []);
+
+            if (!Array.isArray(quizList) || quizList.length === 0) {
                 if (!isBackground) {
                     document.getElementById('quiz-title').innerText = "NO DATA FOUND";
                 }
                 return;
             }
 
-            setCachedQuizzes(data);
+            // サーバーの正解済みリストをローカルにマージ（デバイス間同期）
+            mergeSolvedIds(solvedIds);
+
+            setCachedQuizzes(quizList);
 
             if (isBackground) {
-                const changed = JSON.stringify(data) !== JSON.stringify(quizData);
-                quizData = data;
+                const changed = JSON.stringify(quizList) !== JSON.stringify(quizData);
+                quizData = quizList;
                 updateProgress();
                 if (changed) {
-                    // 現在表示中のクイズを維持しつつ再描画
                     renderQuiz(Math.min(currentIndex, quizData.length - 1));
                     showCacheStatus('updated', '✓ UPDATED', 3000);
                 } else {
                     showCacheStatus('updated', '✓ UP TO DATE', 2000);
                 }
             } else {
-                quizData = data;
+                quizData = quizList;
                 updateProgress();
                 renderQuiz(0);
             }

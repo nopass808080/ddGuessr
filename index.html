@@ -1,0 +1,1120 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta name="robots" content="noindex,nofollow">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ddGuessr v0.1.2</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:ital,wght@1,800&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --green: #00ff88;
+            --green-dim: #00cc66;
+            --green-glow: rgba(0, 255, 136, 0.15);
+            --red: #ff4444;
+            --amber: #ffaa00;
+            --bg: #080c0a;
+            --surface: #0d1410;
+            --surface2: #111a14;
+            --border: #1a2e20;
+            --border-bright: #2a4a30;
+            --text: #c8d8c0;
+            --text-dim: #5a7060;
+            --mono: 'Share Tech Mono', monospace;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--mono);
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        /* Scanline overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: repeating-linear-gradient(
+                0deg,
+                transparent,
+                transparent 2px,
+                rgba(0,0,0,0.08) 2px,
+                rgba(0,0,0,0.08) 4px
+            );
+            pointer-events: none;
+            z-index: 9999;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background: var(--surface);
+            border: 1px solid var(--border-bright);
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: 0 0 40px rgba(0,255,136,0.05), 0 0 80px rgba(0,0,0,0.8);
+        }
+
+        /* ── HEADER ── */
+        header {
+            background: var(--bg);
+            border-bottom: 1px solid var(--border-bright);
+            padding: 10px 15px;
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            gap: 10px;
+        }
+
+        h1 {
+            margin: 0;
+            font-family: 'Exo 2', sans-serif;
+            font-size: 1.6rem;
+            font-style: italic;
+            letter-spacing: 3px;
+            color: var(--green);
+            text-shadow: 0 0 20px rgba(0,255,136,0.5);
+            justify-self: center;
+        }
+
+        .agent-badge {
+            font-family: var(--mono);
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            text-align: left;
+            line-height: 1.4;
+        }
+        .agent-badge .label { color: var(--text-dim); }
+        .agent-badge .name {
+            color: var(--green);
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            cursor: pointer;
+            border-bottom: 1px dashed var(--green-dim);
+        }
+        .agent-badge .name:hover { color: #fff; }
+
+        /* Codename setup screen */
+        #codename-setup {
+            background: var(--bg);
+            border-bottom: 2px solid var(--green);
+            padding: 20px;
+            text-align: center;
+        }
+        #codename-setup p {
+            margin: 0 0 12px;
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        #codename-setup-input {
+            width: 100%;
+            max-width: 300px;
+            padding: 12px;
+            background: var(--surface2);
+            border: 1px solid var(--border-bright);
+            border-radius: 2px;
+            color: var(--green);
+            font-family: var(--mono);
+            font-size: 1rem;
+            text-align: center;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+        }
+        #codename-setup-input:focus { outline: none; border-color: var(--green); box-shadow: 0 0 10px var(--green-glow); }
+        #codename-confirm-btn {
+            display: block;
+            width: 100%;
+            max-width: 300px;
+            margin: 0 auto;
+            padding: 12px;
+            background: var(--green);
+            color: var(--bg);
+            border: none;
+            font-family: var(--mono);
+            font-size: 0.9rem;
+            font-weight: bold;
+            letter-spacing: 2px;
+            cursor: pointer;
+        }
+        #codename-confirm-btn:hover { background: #fff; }
+
+        /* ── PROGRESS BAR ── */
+        .progress-bar-wrap {
+            background: var(--bg);
+            border-bottom: 1px solid var(--border);
+            padding: 8px 15px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .progress-label {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            white-space: nowrap;
+            letter-spacing: 1px;
+        }
+        .progress-track {
+            flex: 1;
+            height: 4px;
+            background: var(--border-bright);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: var(--green);
+            box-shadow: 0 0 8px var(--green);
+            transition: width 0.5s ease;
+            width: 0%;
+        }
+        .progress-count {
+            font-size: 0.7rem;
+            color: var(--green);
+            white-space: nowrap;
+        }
+
+        /* ── CAROUSEL ── */
+        .carousel-container {
+            position: relative;
+            background: #000;
+            border-bottom: 1px solid var(--border);
+            touch-action: pan-y;
+            user-select: none;
+        }
+        #quiz-image-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        #quiz-image {
+            width: 100%;
+            height: auto;
+            max-height: 65vh;
+            object-fit: contain;
+            transition: opacity 0.25s ease;
+            display: block;
+        }
+        /* Image loading spinner */
+        .img-spinner {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            opacity: 0;
+            transition: opacity 0.15s;
+            pointer-events: none;
+            z-index: 5;
+        }
+        .img-spinner.active { opacity: 1; }
+        .img-spinner::after {
+            content: '';
+            width: 28px;
+            height: 28px;
+            border: 2px solid var(--border-bright);
+            border-top-color: var(--green);
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Solved overlay on carousel */
+        .solved-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 255, 136, 0.08);
+            border: 2px solid var(--green);
+            display: flex;
+            align-items: flex-end;
+            justify-content: flex-end;
+            padding: 12px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .solved-overlay.visible { opacity: 1; }
+        .solved-stamp {
+            font-size: 0.7rem;
+            color: var(--green);
+            letter-spacing: 2px;
+            border: 1px solid var(--green);
+            padding: 3px 8px;
+            background: rgba(0,0,0,0.7);
+        }
+
+        .nav-btn {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0,0,0,0.7);
+            color: var(--green);
+            border: 1px solid var(--border-bright);
+            padding: 14px 9px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-family: var(--mono);
+            z-index: 10;
+            transition: background 0.2s, color 0.2s;
+        }
+        .nav-btn:hover:not(:disabled) { background: var(--green); color: #000; }
+        .nav-btn:disabled { opacity: 0.15; cursor: default; }
+        .prev-btn { left: 0; }
+        .next-btn { right: 0; }
+
+        /* ── QUIZ INFO ── */
+        .quiz-info {
+            padding: 10px 15px;
+            background: var(--surface2);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        #quiz-title {
+            margin: 0;
+            font-size: 0.85rem;
+            color: var(--text);
+            letter-spacing: 1px;
+            flex: 1;
+        }
+        .title-solved-mark {
+            color: var(--green);
+            font-size: 0.75rem;
+            letter-spacing: 1px;
+            white-space: nowrap;
+            display: none;
+        }
+        .title-solved-mark.visible { display: block; }
+
+        /* ── WINNER INFO ── */
+        .winner-info {
+            padding: 8px 15px;
+            background: var(--bg);
+            border-bottom: 1px solid var(--border);
+            font-size: 0.72rem;
+        }
+        .winner-count { color: var(--text-dim); margin-bottom: 4px; }
+        .winner-count span { color: var(--green); }
+        .winner-list { display: flex; flex-wrap: wrap; gap: 4px; }
+        .winner-tag {
+            background: var(--surface2);
+            color: var(--text-dim);
+            padding: 1px 7px;
+            border: 1px solid var(--border-bright);
+            font-size: 0.7rem;
+            letter-spacing: 1px;
+        }
+
+        /* ── INPUT PANEL ── */
+        .input-panel { padding: 16px 15px; }
+
+        .instruction {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+            margin: 0 0 12px;
+            text-align: center;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 13px 15px;
+            margin-bottom: 8px;
+            background: var(--surface2);
+            border: 1px solid var(--border-bright);
+            border-radius: 2px;
+            color: var(--green);
+            font-family: var(--mono);
+            font-size: 0.95rem;
+            text-align: center;
+            letter-spacing: 2px;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: var(--green);
+            box-shadow: 0 0 12px var(--green-glow);
+        }
+        input[type="text"].error {
+            border-color: var(--red);
+            background: rgba(255,68,68,0.05);
+        }
+        input[type="text"]::placeholder { color: var(--text-dim); }
+
+        .guess-btn {
+            width: 100%;
+            padding: 16px;
+            background: transparent;
+            border: 1px solid var(--green);
+            color: var(--green);
+            font-family: var(--mono);
+            font-size: 1rem;
+            letter-spacing: 3px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+            margin-top: 4px;
+        }
+        .guess-btn:hover {
+            background: var(--green);
+            color: #000;
+            box-shadow: 0 0 20px var(--green-glow);
+        }
+        .guess-btn:active { transform: scale(0.99); }
+
+        .guess-btn.cleared {
+            border-color: var(--text-dim);
+            color: var(--text-dim);
+            cursor: default;
+            opacity: 0.5;
+        }
+        .guess-btn.cleared:hover {
+            background: transparent;
+            color: var(--text-dim);
+            box-shadow: none;
+        }
+            margin-top: 12px;
+            padding: 12px;
+            border-radius: 2px;
+            text-align: center;
+            font-size: 0.85rem;
+            letter-spacing: 1px;
+            display: none;
+            white-space: pre-wrap;
+        }
+        .success {
+            background: rgba(0,255,136,0.08);
+            border: 1px solid var(--green);
+            color: var(--green);
+        }
+        .fail {
+            background: rgba(255,68,68,0.08);
+            border: 1px solid var(--red);
+            color: var(--red);
+        }
+
+        /* ── MISSION LIST OVERLAY ── */
+        #mission-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.92);
+            z-index: 1000;
+            display: none;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 10px;
+            overflow-y: auto;
+        }
+        #mission-overlay.open { display: flex; }
+
+        .mission-panel {
+            width: 100%;
+            max-width: 600px;
+            background: var(--surface);
+            border: 1px solid var(--border-bright);
+            margin: auto;
+        }
+        .mission-header {
+            background: var(--bg);
+            border-bottom: 1px solid var(--border-bright);
+            padding: 12px 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .mission-header h2 {
+            margin: 0;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            letter-spacing: 3px;
+            font-family: var(--mono);
+            font-weight: normal;
+        }
+        .close-btn {
+            background: none;
+            border: 1px solid var(--border-bright);
+            color: var(--text-dim);
+            font-family: var(--mono);
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            cursor: pointer;
+            letter-spacing: 1px;
+        }
+        .close-btn:hover { border-color: var(--red); color: var(--red); }
+
+        .mission-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1px;
+            background: var(--border);
+        }
+        .mission-item {
+            background: var(--surface2);
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: background 0.2s;
+        }
+        .mission-item:hover { background: var(--surface); }
+        .mission-item.active { background: #0a1f10; }
+        .mission-thumb {
+            width: 100%;
+            aspect-ratio: 4/3;
+            object-fit: cover;
+            display: block;
+            opacity: 0.85;
+            filter: saturate(0.3) brightness(0.9);
+            transition: opacity 0.2s;
+        }
+        .mission-item:hover .mission-thumb { opacity: 1; filter: saturate(0.5) brightness(1); }
+        .mission-item-info {
+            padding: 8px 10px;
+            background: var(--bg);
+            border-top: 1px solid var(--border);
+        }
+        .mission-item-title {
+            font-size: 0.72rem;
+            color: var(--text);
+            letter-spacing: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 2px;
+        }
+        .mission-item-status {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            letter-spacing: 1px;
+        }
+        .mission-solved-badge {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            background: rgba(0,0,0,0.8);
+            border: 1px solid var(--green);
+            color: var(--green);
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            letter-spacing: 1px;
+        }
+        .mission-active-badge {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            background: var(--amber);
+            color: #000;
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            letter-spacing: 1px;
+        }
+
+        /* Mission list button in header */
+        .list-btn {
+            background: none;
+            border: 1px solid var(--green-dim);
+            color: var(--green-dim);
+            font-family: var(--mono);
+            font-size: 0.65rem;
+            padding: 5px 10px;
+            cursor: pointer;
+            letter-spacing: 1px;
+            justify-self: end;
+            transition: border-color 0.2s, color 0.2s, box-shadow 0.2s;
+        }
+        .list-btn:hover {
+            border-color: var(--green);
+            color: var(--green);
+            box-shadow: 0 0 8px var(--green-glow);
+        }
+
+        /* Loading state */
+        .loading-text {
+            color: var(--text-dim);
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            animation: blink 1s step-end infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* Keyboard shortcut hint footer */
+        .kb-hint {
+            padding: 7px 15px;
+            background: var(--bg);
+            border-top: 1px solid var(--border);
+            text-align: center;
+            font-size: 0.58rem;
+            color: var(--text-dim);
+            letter-spacing: 1.5px;
+            opacity: 0.7;
+        }
+        .kb-hint kbd {
+            display: inline-block;
+            padding: 1px 5px;
+            border: 1px solid var(--border-bright);
+            border-radius: 2px;
+            color: var(--text-dim);
+            font-family: var(--mono);
+            font-size: 0.58rem;
+        }
+
+        /* Cache status badge */
+        #cache-status {
+            position: fixed;
+            bottom: 14px;
+            right: 14px;
+            font-family: var(--mono);
+            font-size: 0.62rem;
+            letter-spacing: 1px;
+            padding: 4px 10px;
+            border-radius: 2px;
+            z-index: 9000;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+        #cache-status.show { opacity: 1; }
+        #cache-status.cached {
+            background: rgba(255,170,0,0.12);
+            border: 1px solid var(--amber);
+            color: var(--amber);
+        }
+        #cache-status.syncing {
+            background: rgba(0,255,136,0.08);
+            border: 1px solid var(--green-dim);
+            color: var(--text-dim);
+        }
+        #cache-status.updated {
+            background: rgba(0,255,136,0.1);
+            border: 1px solid var(--green);
+            color: var(--green);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- HEADER -->
+    <header>
+        <div class="agent-badge" id="agent-badge" style="display:none">
+            <div class="label">AGENT</div>
+            <div class="name" onclick="resetCodename()" title="Click to change">
+                <span id="agent-name-display"></span>
+            </div>
+        </div>
+        <div id="header-left-placeholder"></div>
+        <h1>ddGuessr</h1>
+        <button class="list-btn" onclick="openMissionList()" id="list-toggle-btn">≡ MISSIONS</button>
+    </header>
+
+    <!-- CODENAME SETUP -->
+    <div id="codename-setup">
+        <p>// IDENTIFY YOURSELF</p>
+        <input type="text" id="codename-setup-input" placeholder="ENTER CODENAME" autocomplete="off">
+        <button id="codename-confirm-btn" onclick="confirmCodename()">CONFIRM IDENTITY</button>
+    </div>
+
+    <!-- PROGRESS BAR -->
+    <div class="progress-bar-wrap">
+        <div class="progress-label">PROGRESS</div>
+        <div class="progress-track">
+            <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="progress-count" id="progress-count">0/0</div>
+    </div>
+
+    <!-- CAROUSEL -->
+    <div class="carousel-container">
+        <button class="nav-btn prev-btn" onclick="changeQuiz(-1)" id="prevBtn">&lt;</button>
+        <div id="quiz-image-container">
+            <img id="quiz-image" src="" alt="" loading="lazy">
+            <div class="img-spinner" id="img-spinner"></div>
+            <div class="solved-overlay" id="solved-overlay">
+                <div class="solved-stamp">CLEARED</div>
+            </div>
+        </div>
+        <button class="nav-btn next-btn" onclick="changeQuiz(1)" id="nextBtn">&gt;</button>
+    </div>
+
+    <!-- QUIZ INFO -->
+    <div class="quiz-info">
+        <p id="quiz-title"><span class="loading-text">ACQUIRING TARGET...</span></p>
+        <span class="title-solved-mark" id="title-solved-mark">✓ SOLVED</span>
+    </div>
+
+    <!-- WINNER INFO -->
+    <div class="winner-info">
+        <div class="winner-count">SOLVED BY <span id="winnerCount">0</span> AGENTS</div>
+        <div class="winner-list" id="winnerList"></div>
+    </div>
+
+    <!-- INPUT PANEL -->
+    <div class="input-panel">
+        <p class="instruction">Enter coordinates (LAT,LNG)</p>
+        <input type="text" id="coords" placeholder="LAT,LNG" oninput="normalizeCoordInput(this)">
+        <button class="guess-btn" id="guess-btn" onclick="submitGuess()">TRANSMIT COORDINATES</button>
+        <div id="result-display"></div>
+    </div>
+
+    <!-- KEYBOARD HINT -->
+    <div class="kb-hint">
+        <kbd>←</kbd> <kbd>→</kbd> NAVIGATE &nbsp;·&nbsp; <kbd>ENTER</kbd> TRANSMIT
+    </div>
+</div>
+
+<!-- CACHE STATUS BADGE -->
+<div id="cache-status"></div>
+
+<!-- MISSION LIST OVERLAY -->
+<div id="mission-overlay">
+    <div class="mission-panel">
+        <div class="mission-header">
+            <h2>// MISSION INDEX</h2>
+            <button class="close-btn" onclick="closeMissionList()">[ CLOSE ]</button>
+        </div>
+        <div class="mission-grid" id="mission-grid">
+            <div style="padding:20px;color:var(--text-dim);font-size:0.75rem;letter-spacing:2px;">
+                <span class="loading-text">LOADING...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbz3f_QmMrqRby9qfuwr4rdbtVNnw6EVaoltCty9i1O4UjtPSzj0ZdhmwW-wfP8VW8giIA/exec";
+    let quizData = [];
+    let currentIndex = 0;
+    let codename = '';
+
+    // ── INIT ──
+    window.onload = () => {
+        const saved = localStorage.getItem('dd_codename');
+        if (saved) {
+            setCodename(saved);
+        }
+        loadQuizzes();
+
+        // Enter key on setup input
+        document.getElementById('codename-setup-input').addEventListener('keydown', e => {
+            if (e.key === 'Enter') confirmCodename();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT') return;
+
+            if (e.key === 'ArrowLeft') {
+                changeQuiz(-1);
+            } else if (e.key === 'ArrowRight') {
+                changeQuiz(1);
+            }
+        });
+
+    };
+
+    // ── CODENAME ──
+    function confirmCodename() {
+        const val = document.getElementById('codename-setup-input').value.trim().toUpperCase();
+        if (!val) return;
+        setCodename(val);
+        localStorage.setItem('dd_codename', val);
+    }
+
+    function setCodename(name) {
+        codename = name;
+        document.getElementById('codename-setup').style.display = 'none';
+        document.getElementById('agent-badge').style.display = 'block';
+        document.getElementById('agent-name-display').innerText = name;
+        document.getElementById('header-left-placeholder').style.display = 'none';
+    }
+
+    function resetCodename() {
+        codename = '';
+        document.getElementById('codename-setup').style.display = 'block';
+        document.getElementById('agent-badge').style.display = 'none';
+        document.getElementById('codename-setup-input').value = document.getElementById('agent-name-display').innerText;
+        document.getElementById('codename-setup-input').focus();
+    }
+
+    // ── PROGRESS ──
+    function getSolvedSet() {
+        try { return new Set(JSON.parse(localStorage.getItem('dd_solved') || '[]')); }
+        catch { return new Set(); }
+    }
+    function markSolved(id) {
+        const s = getSolvedSet();
+        s.add(String(id));
+        localStorage.setItem('dd_solved', JSON.stringify([...s]));
+    }
+    function isSolved(id) { return getSolvedSet().has(String(id)); }
+
+    function updateProgress() {
+        const solved = getSolvedSet();
+        const total = quizData.length;
+        const count = quizData.filter(q => solved.has(String(q.id))).length;
+        const pct = total > 0 ? (count / total * 100) : 0;
+        document.getElementById('progress-fill').style.width = pct + '%';
+        document.getElementById('progress-count').innerText = `${count}/${total}`;
+    }
+
+    // ── CACHE HELPERS ──
+    const CACHE_KEY    = 'dd_quizlist_cache';
+    const CACHE_TS_KEY = 'dd_quizlist_ts';
+    const CACHE_TTL_MS = 5 * 60 * 1000; // 5分以上経過したらバックグラウンド更新
+
+    function getCachedQuizzes() {
+        try {
+            const raw = localStorage.getItem(CACHE_KEY);
+            if (!raw) return null;
+            const data = JSON.parse(raw);
+            return Array.isArray(data) && data.length > 0 ? data : null;
+        } catch { return null; }
+    }
+
+    function setCachedQuizzes(data) {
+        try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+            localStorage.setItem(CACHE_TS_KEY, Date.now().toString());
+        } catch { /* quota超過時は無視 */ }
+    }
+
+    function cacheIsStale() {
+        const ts = parseInt(localStorage.getItem(CACHE_TS_KEY) || '0', 10);
+        return (Date.now() - ts) > CACHE_TTL_MS;
+    }
+
+    function showCacheStatus(state, text, autohideMs = 0) {
+        const el = document.getElementById('cache-status');
+        el.className = 'show ' + state;
+        el.innerText = text;
+        if (autohideMs > 0) {
+            setTimeout(() => { el.classList.remove('show'); }, autohideMs);
+        }
+    }
+
+    function hideCacheStatus() {
+        document.getElementById('cache-status').classList.remove('show');
+    }
+
+    // ── LOAD QUIZZES (Stale-While-Revalidate) ──
+    async function loadQuizzes() {
+        const cached = getCachedQuizzes();
+
+        if (cached) {
+            quizData = cached;
+            updateProgress();
+            renderQuiz(0);
+            showCacheStatus('cached', '▸ CACHED DATA');
+
+            if (!cacheIsStale()) {
+                setTimeout(hideCacheStatus, 2000);
+                return;
+            }
+
+            showCacheStatus('syncing', '↻ SYNCING...');
+            _fetchAndUpdate(true);
+
+        } else {
+            // キャッシュなし → 通常ロード
+            await _fetchAndUpdate(false);
+        }
+    }
+
+    async function _fetchAndUpdate(isBackground) {
+        try {
+            const response = await fetch(`${GAS_URL}?action=getQuizList`);
+            const data = await response.json();
+
+            if (!Array.isArray(data) || data.length === 0) {
+                if (!isBackground) {
+                    document.getElementById('quiz-title').innerText = "NO DATA FOUND";
+                }
+                return;
+            }
+
+            setCachedQuizzes(data);
+
+            if (isBackground) {
+                const changed = JSON.stringify(data) !== JSON.stringify(quizData);
+                quizData = data;
+                updateProgress();
+                if (changed) {
+                    // 現在表示中のクイズを維持しつつ再描画
+                    renderQuiz(Math.min(currentIndex, quizData.length - 1));
+                    showCacheStatus('updated', '✓ UPDATED', 3000);
+                } else {
+                    showCacheStatus('updated', '✓ UP TO DATE', 2000);
+                }
+            } else {
+                quizData = data;
+                updateProgress();
+                renderQuiz(0);
+            }
+        } catch (err) {
+            if (!isBackground) {
+                document.getElementById('quiz-title').innerText = "FAILED TO LOAD";
+            } else {
+                showCacheStatus('cached', '⚠ SYNC FAILED', 3000);
+            }
+        }
+    }
+
+    // ── RENDER QUIZ ──
+    function renderQuiz(index) {
+        currentIndex = index;
+        const quiz = quizData[index];
+        const img = document.getElementById('quiz-image');
+        const spinner = document.getElementById('img-spinner');
+        const solved = isSolved(quiz.id);
+
+        // Show spinner, hide image
+        img.style.opacity = 0;
+        spinner.classList.add('active');
+
+        // Swap src and wait for load
+        const newSrc = quiz.imageUrl;
+        img.onload = img.onerror = () => {
+            spinner.classList.remove('active');
+            img.style.opacity = 1;
+        };
+        img.src = newSrc;
+
+        document.getElementById('quiz-title').innerText = quiz.title || "UNTITLED";
+        document.getElementById('coords').value = "";
+        document.getElementById('coords').classList.remove('error');
+
+            const coordsEl = document.getElementById('coords');
+            const guessBtn = document.getElementById('guess-btn');
+            const resultDisplay = document.getElementById('result-display');
+            if (solved) {
+                coordsEl.disabled = true;
+                coordsEl.placeholder = "ALREADY CLEARED";
+                guessBtn.disabled = true;
+                guessBtn.classList.add('cleared');
+                guessBtn.innerText = "ALREADY CLEARED";
+                const msg = quiz.message;
+                resultDisplay.style.display = "block";
+                resultDisplay.className = "success";
+                resultDisplay.innerText = msg ? msg : "✓ CLEARED";
+            } else {
+                coordsEl.disabled = false;
+                coordsEl.placeholder = "LAT,LNG";
+                guessBtn.disabled = false;
+                guessBtn.classList.remove('cleared');
+                guessBtn.innerText = "TRANSMIT COORDINATES";
+                resultDisplay.style.display = "none";
+            }
+
+            // Solved state
+            document.getElementById('solved-overlay').classList.toggle('visible', solved);
+            const solvedMark = document.getElementById('title-solved-mark');
+            solvedMark.classList.toggle('visible', solved);
+
+            updateWinnerDisplay(quiz);
+
+        document.getElementById('prevBtn').disabled = (index === 0);
+        document.getElementById('nextBtn').disabled = (index === quizData.length - 1);
+    }
+
+    function updateWinnerDisplay(quiz) {
+        document.getElementById('winnerCount').innerText = quiz.winnerCount || 0;
+        const listEl = document.getElementById('winnerList');
+        listEl.innerHTML = "";
+        if (quiz.recentWinners) {
+            quiz.recentWinners.forEach(name => {
+                const span = document.createElement('span');
+                span.className = "winner-tag";
+                span.innerText = name;
+                listEl.appendChild(span);
+            });
+        }
+    }
+
+    function changeQuiz(step) {
+        const next = currentIndex + step;
+        if (next >= 0 && next < quizData.length) renderQuiz(next);
+    }
+
+    // ── ① SWIPE ──
+    (function initSwipe() {
+        const el = document.querySelector('.carousel-container');
+        let startX = 0, startY = 0;
+
+        el.addEventListener('touchstart', e => {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        }, { passive: true });
+
+        el.addEventListener('touchend', e => {
+            const dx = e.changedTouches[0].clientX - startX;
+            const dy = e.changedTouches[0].clientY - startY;
+            // 水平方向が主体で40px以上スワイプした場合のみ反応
+            if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+                changeQuiz(dx < 0 ? 1 : -1);
+            }
+        }, { passive: true });
+    })();
+
+    // ── ② 座標正規化 ──
+    function normalizeCoordInput(input) {
+        let v = input.value;
+
+        // 度分秒 "35°41'22.2\"N, 139°41'31.2\"E" → 10進数に変換
+        const dmsRegex = /([+-]?\d+)[°\s]\s*(\d+)['\s]\s*([\d.]+)[\"″]?\s*([NSns]?)\s*[,\s]+\s*([+-]?\d+)[°\s]\s*(\d+)['\s]\s*([\d.]+)[\"″]?\s*([EWew]?)/;
+        const dmsMatch = v.match(dmsRegex);
+        if (dmsMatch) {
+            const toDecimal = (d, m, s, dir) => {
+                let dec = parseFloat(d) + parseFloat(m) / 60 + parseFloat(s) / 3600;
+                if (/[SsWw]/.test(dir)) dec = -dec;
+                return dec.toFixed(6);
+            };
+            const lat = toDecimal(dmsMatch[1], dmsMatch[2], dmsMatch[3], dmsMatch[4]);
+            const lng = toDecimal(dmsMatch[5], dmsMatch[6], dmsMatch[7], dmsMatch[8]);
+            input.value = `${lat},${lng}`;
+            return;
+        }
+
+        const spaceCoord = v.trim().match(/^(-?\d+\.?\d*)\s+(-?\d+\.?\d*)$/);
+        if (spaceCoord) {
+            input.value = `${spaceCoord[1]},${spaceCoord[2]}`;
+            return;
+        }
+
+        input.value = v.replace(/\s+/g, '');
+    }
+
+    // ── SUBMIT ──
+    async function submitGuess() {
+        if (!codename) {
+            document.getElementById('codename-setup').style.display = 'block';
+            document.getElementById('codename-setup-input').focus();
+            return;
+        }
+
+        if (isSolved(quizData[currentIndex].id)) return;
+
+        const coordsEl = document.getElementById('coords');
+        const resultDisplay = document.getElementById('result-display');
+
+        normalizeCoordInput(coordsEl);
+        const coordInput = coordsEl.value.trim();
+        const coordRegex = /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/;
+
+        coordsEl.classList.remove('error');
+
+        if (!coordRegex.test(coordInput)) {
+            coordsEl.classList.add('error');
+            resultDisplay.style.display = "block";
+            resultDisplay.className = "fail";
+            resultDisplay.innerText = "INVALID COORDINATES";
+            return;
+        }
+
+        resultDisplay.style.display = "block";
+        resultDisplay.className = "";
+        resultDisplay.innerText = "TRANSMITTING...";
+
+        try {
+            const response = await fetch(GAS_URL, {
+                method: "POST",
+                body: JSON.stringify({
+                    id: quizData[currentIndex].id,
+                    codename,
+                    lat: parseFloat(coordInput.split(',')[0]),
+                    lng: parseFloat(coordInput.split(',')[1])
+                })
+            });
+            const result = await response.json();
+
+            if (result.success) {
+                const msg = quizData[currentIndex].message;
+                resultDisplay.innerText = "Bingo! 👍" + (msg ? "\n" + msg : "");
+                resultDisplay.className = "success";
+
+                markSolved(quizData[currentIndex].id);
+                updateProgress();
+                document.getElementById('solved-overlay').classList.add('visible');
+                document.getElementById('title-solved-mark').classList.add('visible');
+
+                // ③ 正解時に即ボタン・input をロック
+                coordsEl.disabled = true;
+                coordsEl.placeholder = "ALREADY CLEARED";
+                const guessBtn = document.getElementById('guess-btn');
+                guessBtn.disabled = true;
+                guessBtn.classList.add('cleared');
+                guessBtn.innerText = "ALREADY CLEARED";
+
+                const currentQuiz = quizData[currentIndex];
+                if (!currentQuiz.recentWinners.includes(codename)) {
+                    currentQuiz.winnerCount++;
+                    currentQuiz.recentWinners.unshift(codename);
+                    if (currentQuiz.recentWinners.length > 5) currentQuiz.recentWinners.pop();
+                    updateWinnerDisplay(currentQuiz);
+                }
+            } else {
+                resultDisplay.innerText = `Noooo! 🚫`;
+                resultDisplay.className = "fail";
+            }
+        } catch (err) {
+            resultDisplay.innerText = "TRANSMISSION FAILED";
+            resultDisplay.className = "fail";
+        }
+    }
+
+    // ── MISSION LIST ──
+    function openMissionList() {
+        renderMissionGrid();
+        document.getElementById('mission-overlay').classList.add('open');
+    }
+
+    function closeMissionList() {
+        document.getElementById('mission-overlay').classList.remove('open');
+    }
+
+    function renderMissionGrid() {
+        const grid = document.getElementById('mission-grid');
+        grid.innerHTML = '';
+        if (quizData.length === 0) {
+            grid.innerHTML = '<div style="padding:20px;color:var(--text-dim);font-size:0.75rem;">NO MISSIONS LOADED</div>';
+            return;
+        }
+
+        quizData.forEach((quiz, i) => {
+            const solved = isSolved(quiz.id);
+            const isActive = (i === currentIndex);
+
+            const item = document.createElement('div');
+            item.className = 'mission-item' + (isActive ? ' active' : '');
+            item.onclick = () => { renderQuiz(i); closeMissionList(); };
+
+            item.innerHTML = `
+                <img class="mission-thumb" src="${quiz.imageUrl}" alt="${quiz.title || ''}">
+                ${isActive ? '<div class="mission-active-badge">ACTIVE</div>' : ''}
+                ${solved ? '<div class="mission-solved-badge">✓ CLEARED</div>' : ''}
+                <div class="mission-item-info">
+                    <div class="mission-item-title">${quiz.title || 'UNTITLED'}</div>
+                    <div class="mission-item-status">${solved ? 'CLEARED' : 'PENDING'} · ${quiz.winnerCount || 0} AGENTS</div>
+                </div>
+            `;
+            grid.appendChild(item);
+        });
+    }
+
+    // Close overlay on background click
+    document.getElementById('mission-overlay').addEventListener('click', function(e) {
+        if (e.target === this) closeMissionList();
+    });
+</script>
+</body>
+</html>

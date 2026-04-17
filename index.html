@@ -771,7 +771,7 @@
         const val = inputEl.value.trim().toUpperCase();
         if (!val) return;
         codename = val;
-        setCodename(val);
+        setCodename(val, true); // skipSync=true: 直後に _fetchAndUpdate を自分で呼ぶため
         localStorage.setItem('dd_codename', val);
         _fetchAndUpdate(true); // 確定直後に同期を実行
     }
@@ -872,10 +872,8 @@
     */
 
     function syncSolvedIds(serverIds) {
-        if (serverIds === null || serverIds === undefined) return;
-        if (!Array.isArray(serverIds)) return;
-        // 空配列はサーバー未対応 or 取得エラーとみなしてローカルを保護する
-        if (serverIds.length === 0) return;
+        if (!Array.isArray(serverIds)) return; // null/undefined = 通信失敗等 → ローカルを触らない
+        // 空配列を含めサーバーデータで上書き（管理者による履歴消去も反映される）
         localStorage.setItem('dd_solved', JSON.stringify(serverIds.map(String)));
     }
 
@@ -944,10 +942,10 @@
                 return;
             }
 
-            //if (solvedIds && Array.isArray(solvedIds) && solvedIds.length > 0) {
-            if (Array.isArray(solvedIds)) {
-                syncSolvedIds(solvedIds); 
-            } 
+            // codenameありの場合のみ同期（なしだとGASが空配列を返し誤消去になる）
+            if (codenameUpper && Array.isArray(solvedIds)) {
+                syncSolvedIds(solvedIds);
+            }
             
             markSyncTime();
             setCachedQuizzes(quizList);
@@ -962,7 +960,8 @@
                     renderQuiz(Math.min(currentIndex, quizData.length - 1), true);
                     showCacheStatus('updated', '✓ UPDATED', 3000);
                 } else {
-                    renderQuiz(currentIndex, true);
+                    // 変更なし：不要な再レンダリングをスキップ
+                    updateProgress();
                     showCacheStatus('updated', '✓ UP TO DATE', 2000);
                 }
             } else {
@@ -1209,6 +1208,7 @@
     function getDistanceHint(d) {
         if (d > 500) return "More than 500m away.";
         if (d > 250) return "More than 250m away.";
+        return "Within 250m — you're close!";
     }
 
     // ── MISSION LIST ──

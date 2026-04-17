@@ -4,7 +4,7 @@
     <meta name="robots" content="noindex,nofollow">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ddGuessr v0.2.5</title>
+    <title>ddGuessr v0.2.6</title>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:ital,wght@1,800&family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -745,12 +745,12 @@
 
         // Enter key on setup input
         document.getElementById('codename-setup-input').addEventListener('keydown', e => {
-            if (e.key === 'Enter') confirmCodename();
+            if (e.key === 'Enter' && !e.isComposing) confirmCodename();
         });
 
         // Enter key on coords input → submit
         document.getElementById('coords').addEventListener('keydown', e => {
-            if (e.key === 'Enter') submitGuess();
+            if (e.key === 'Enter' && !e.isComposing) submitGuess();
         });
 
         document.addEventListener('keydown', (e) => {
@@ -791,6 +791,7 @@
 
     function resetCodename() {
         codename = '';
+        localStorage.removeItem('dd_codename');
         document.getElementById('codename-setup').style.display = 'block';
         document.getElementById('agent-badge').style.display = 'none';
         document.getElementById('codename-setup-input').value = document.getElementById('agent-name-display').innerText;
@@ -950,13 +951,12 @@
             markSyncTime();
             setCachedQuizzes(quizList);
 
-            quizData = quizList;
-            updateProgress();
-
             if (isBackground) {
                 const changed = JSON.stringify(quizList) !== JSON.stringify(quizData);
-                //const changed = quizList[0]?.id !== quizData[0]?.id;
-                
+
+                quizData = quizList;
+                updateProgress();
+
                 if (changed) {
                     renderQuiz(Math.min(currentIndex, quizData.length - 1), true);
                     showCacheStatus('updated', '✓ UPDATED', 3000);
@@ -988,7 +988,7 @@
         const newSrc = quiz.imageUrl;
 
         // URLが変わらない場合は、ロード完了を待たずに表示
-        if (img.src === newSrc) {
+        if (img.getAttribute('src') === newSrc) {
             spinner.classList.remove('active');
             img.style.opacity = 1;
         } else {
@@ -1119,12 +1119,19 @@
     // ── SUBMIT ──
     async function submitGuess() {
         if (!codename) {
-            document.getElementById('codename-setup').style.display = 'block';
+            const setupEl = document.getElementById('codename-setup');
+            setupEl.style.display = 'block';
             document.getElementById('codename-setup-input').focus();
-            const resultDisplay = document.getElementById('result-display');
-            resultDisplay.style.display = "block";
-            resultDisplay.className = "fail";
-            resultDisplay.innerText = "CODENAME REQUIRED";
+
+            // setup画面内にエラーメッセージを表示（既存のメッセージ要素を再利用 or 動的生成）
+            let setupError = document.getElementById('codename-setup-error');
+            if (!setupError) {
+                setupError = document.createElement('p');
+                setupError.id = 'codename-setup-error';
+                setupError.style.cssText = 'color:var(--red);font-size:0.75rem;letter-spacing:2px;margin:8px 0 0;';
+                setupEl.appendChild(setupError);
+            }
+            setupError.innerText = '⚠ CODENAME REQUIRED';
             return;
         }
 
@@ -1179,12 +1186,14 @@
                 // 正解時にボタン・input をロック
                 coordsEl.disabled = true;
                 coordsEl.placeholder = "LAT,LNG";
+                guessBtn.disabled = true;
                 guessBtn.classList.add('cleared');
                 guessBtn.innerText = "ALREADY CLEARED";
 
                 const currentQuiz = quizData[currentIndex];
                 if (!currentQuiz.recentWinners?.includes(codename)) {
-                    currentQuiz.winnerCount++;
+                    currentQuiz.winnerCount = (currentQuiz.winnerCount || 0) + 1;
+                    currentQuiz.recentWinners = currentQuiz.recentWinners || [];
                     currentQuiz.recentWinners.unshift(codename);
                     if (currentQuiz.recentWinners.length > 5) currentQuiz.recentWinners.pop();
                     updateWinnerDisplay(currentQuiz);

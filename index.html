@@ -4,7 +4,7 @@
     <meta name="robots" content="noindex,nofollow">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ddGuessr v0.1.9</title>
+    <title>ddGuessr v0.2.0</title>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:ital,wght@1,800&family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -1084,13 +1084,17 @@
             return;
         }
 
-        const spaceCoord = v.trim().match(/^(-?\d+\.?\d*)\s+(-?\d+\.?\d*)$/);
-        if (spaceCoord) {
-            input.value = `${spaceCoord[1]},${spaceCoord[2]}`;
-            return;
+        const parts = v.split(/[,\s]+/).filter(p => p !== "");
+        if (parts.length === 2) {
+            const lat = parseFloat(parts[0]);
+            const lng = parseFloat(parts[1]);
+            
+            if (!isNaN(lat) && !isNaN(lng)) {
+                // ここで小数点以下6桁に丸める
+                input.value = `${lat.toFixed(6)},${lng.toFixed(6)}`;
+                return;
+            }
         }
-
-        input.value = v.replace(/\s+/g, '');
     }
 
     // ── SUBMIT ──

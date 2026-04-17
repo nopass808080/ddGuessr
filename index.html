@@ -357,6 +357,10 @@
             border-color: var(--green);
             box-shadow: 0 0 12px var(--green-glow);
         }
+        input[type="text"]:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
         input[type="text"].error {
             border-color: var(--red);
             background: rgba(255,68,68,0.05);
@@ -387,7 +391,7 @@
             border-color: var(--text-dim);
             color: var(--text-dim);
             cursor: default;
-            opacity: 0.5;
+            opacity: 1;
         }
         .guess-btn.cleared:hover {
             background: transparent;

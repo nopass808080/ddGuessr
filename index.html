@@ -4,7 +4,7 @@
     <meta name="robots" content="noindex,nofollow">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ddGuessr v0.2.2</title>
+    <title>ddGuessr v0.2.3</title>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:ital,wght@1,800&family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -674,7 +674,7 @@
 
     <!-- INPUT PANEL -->
     <div class="input-panel">
-        <p class="instruction">Enter coordinates within 40m (LAT,LNG)</p>
+        <p class="instruction">Enter coordinates within 20m (LAT,LNG)</p>
         <input type="text" id="coords" placeholder="LAT,LNG" oninput="normalizeCoordInput(this)">
         <button class="guess-btn" id="guess-btn" onclick="submitGuess()">TRANSMIT COORDINATES</button>
         <div id="result-display"></div>

@@ -4,7 +4,7 @@
     <meta name="robots" content="noindex,nofollow">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ddGuessr v0.2.9</title>
+    <title>ddGuessr v0.3.2</title>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:ital,wght@1,800&family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -652,7 +652,7 @@
     <div class="carousel-container">
         <button class="nav-btn prev-btn" onclick="changeQuiz(-1)" id="prevBtn" ontouchend="this.blur()">&lt;</button>
         <div id="quiz-image-container">
-            <img id="quiz-image" src="" alt="">
+            <img id="quiz-image" src="" alt="" loading="lazy">
             <div class="img-spinner" id="img-spinner"></div>
             <div class="solved-overlay" id="solved-overlay">
                 <div class="solved-stamp">CLEARED</div>
@@ -754,13 +754,11 @@
         });
 
         document.addEventListener('keydown', (e) => {
+            if (e.target.id === 'codename-setup-input') return;
+            if (e.key === 'Escape') { closeMissionList(); return; }
             if (e.target.tagName === 'INPUT') return;
-
-            if (e.key === 'ArrowLeft') {
-                changeQuiz(-1);
-            } else if (e.key === 'ArrowRight') {
-                changeQuiz(1);
-            }
+            if (e.key === 'ArrowLeft') changeQuiz(-1);
+            else if (e.key === 'ArrowRight') changeQuiz(1);
         });
 
     };
@@ -859,25 +857,23 @@
 
     // ── SOLVED SYNC ──
 
-    /*
-    function mergeSolvedIds(serverIds) {
-        if (!Array.isArray(serverIds) || serverIds.length === 0) return;
-        const local = getSolvedSet();
-        let changed = false;
-        serverIds.forEach(id => {
-            const key = String(id);
-            if (!local.has(key)) { local.add(key); changed = true; }
-        });
-        if (changed) {
-            localStorage.setItem('dd_solved', JSON.stringify([...local]));
-        }
-    }
-    */
+    function syncSolvedIds(serverIds, status) {
+        if (!Array.isArray(serverIds)) return;
 
-    function syncSolvedIds(serverIds) {
-        if (!Array.isArray(serverIds)) return; // null/undefined = 通信失敗等 → ローカルを触らない
-        // 空配列を含めサーバーデータで上書き（管理者による履歴消去も反映される）
-        localStorage.setItem('dd_solved', JSON.stringify(serverIds.map(String)));
+        switch (status) {
+            case "ok":
+                localStorage.setItem(
+                    'dd_solved',
+                    JSON.stringify(serverIds.map(String))
+                );
+                break;
+
+            case "not_found":
+            case "no_codename":
+            default:
+                console.warn("Skip solved sync:", status);
+                break;
+        }
     }
 
     function showCacheStatus(state, text, autohideMs = 0) {
@@ -945,11 +941,10 @@
                 return;
             }
 
-            // codenameありの場合のみ同期（なしだとGASが空配列を返し誤消去になる）
-            if (codenameUpper && Array.isArray(solvedIds)) {
-                syncSolvedIds(solvedIds);
+            if (codenameUpper && raw.solvedIds !== undefined) {
+                syncSolvedIds(raw.solvedIds, raw.solvedStatus);
             }
-            
+
             markSyncTime();
             setCachedQuizzes(quizList);
 
@@ -997,9 +992,17 @@
         } else {
             img.style.opacity = 0;
             spinner.classList.add('active');
-            img.onload = img.onerror = () => {
-                spinner.classList.remove('active');
-                img.style.opacity = 1;
+            img.onload = () => {
+                if (img.src === newSrc) {
+                    spinner.classList.remove('active');
+                    img.style.opacity = 1;
+                }
+            };
+            img.onerror = () => {
+                if (img.src === newSrc) {
+                    spinner.classList.remove('active');
+                    img.style.opacity = 0.3;
+                }
             };
             img.src = newSrc;
         }

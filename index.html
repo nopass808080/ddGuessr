@@ -4,7 +4,7 @@
     <meta name="robots" content="noindex,nofollow">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ddGuessr v0.2.8</title>
+    <title>ddGuessr v0.2.9</title>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:ital,wght@1,800&family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -675,7 +675,7 @@
     <!-- INPUT PANEL -->
     <div class="input-panel">
         <p class="instruction">Enter coordinates within 20m (LAT,LNG)</p>
-        <input type="text" id="coords" placeholder="LAT,LNG" oninput="normalizeCoordInput(this)">
+        <input type="text" id="coords" placeholder="LAT,LNG">
         <button class="guess-btn" id="guess-btn" onclick="submitGuess()">TRANSMIT COORDINATES</button>
         <div id="result-display"></div>
     </div>
@@ -1121,14 +1121,15 @@
 
     // ── SUBMIT ──
     async function submitGuess() {
+        // 二重送信防止のロック
         if (submitGuess.locked) return;
 
+        // コールネーム（名前）が未設定の場合は入力を促す
         if (!codename) {
             const setupEl = document.getElementById('codename-setup');
             setupEl.style.display = 'block';
             document.getElementById('codename-setup-input').focus();
 
-            // setup画面内にエラーメッセージを表示（既存のメッセージ要素を再利用 or 動的生成）
             let setupError = document.getElementById('codename-setup-error');
             if (!setupError) {
                 setupError = document.createElement('p');
@@ -1140,17 +1141,23 @@
             return;
         }
 
+        // すでにクリア済みの問題なら何もしない
         if (isSolved(quizData[currentIndex].id)) return;
 
         const coordsEl = document.getElementById('coords');
         const resultDisplay = document.getElementById('result-display');
 
+        // ★【ここがポイント】送信ボタンが押されたこのタイミングで、
+        // 度分秒（DMS）形式などを10進数に一括変換します。
         normalizeCoordInput(coordsEl);
+
         const coordInput = coordsEl.value.trim();
         const coordRegex = /^-?\d+(\.\d+)?,-?\d+(\.\d+)?$/;
 
+        // エラー表示のリセット
         coordsEl.classList.remove('error');
 
+        // フォーマットチェック
         if (!coordRegex.test(coordInput)) {
             coordsEl.classList.add('error');
             resultDisplay.style.display = "block";
@@ -1159,9 +1166,10 @@
             return;
         }
 
-        // 座標範囲チェック
-        const lat = parseFloat(coordInput.split(',')[0]);
-        const lng = parseFloat(coordInput.split(',')[1]);
+        // 座標の数値範囲チェック
+        const parts = coordInput.split(',');
+        const lat = parseFloat(parts[0]);
+        const lng = parseFloat(parts[1]);
         if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
             coordsEl.classList.add('error');
             resultDisplay.style.display = "block";
@@ -1170,15 +1178,16 @@
             return;
         }
 
+        // 送信処理開始
         submitGuess.locked = true;
-
         resultDisplay.style.display = "block";
         resultDisplay.className = "";
         resultDisplay.innerText = "TRANSMITTING...";
 
         const guessBtn = document.getElementById('guess-btn');
-        guessBtn.disabled = true; // 送信中は連打防止
+        guessBtn.disabled = true;
 
+        // パラメータの構築
         const params = new URLSearchParams({
             action: 'submitGuess',
             id: quizData[currentIndex].id,
@@ -1193,6 +1202,7 @@
             const result = await response.json();
 
             if (result.success) {
+                // 正解時の処理
                 const msg = quizData[currentIndex].message;
                 resultDisplay.innerText = "Bingo! 👍" + (msg ? "\n" + msg : "");
                 resultDisplay.className = "success";
@@ -1201,13 +1211,13 @@
                 updateProgress();
                 document.getElementById('solved-overlay').classList.add('visible');
 
-                // 正解時にボタン・input をロック
                 coordsEl.disabled = true;
                 coordsEl.placeholder = "LAT,LNG";
                 guessBtn.disabled = true;
                 guessBtn.classList.add('cleared');
                 guessBtn.innerText = "ALREADY CLEARED";
 
+                // 勝者リストの更新
                 const currentQuiz = quizData[currentIndex];
                 if (!currentQuiz.recentWinners?.includes(codename)) {
                     currentQuiz.winnerCount = (currentQuiz.winnerCount || 0) + 1;
@@ -1217,17 +1227,19 @@
                     updateWinnerDisplay(currentQuiz);
                 }
             } else {
+                // 不正解時の処理（距離に応じたヒントを表示）
                 const hint = (typeof result.distance === "number")
                     ? getDistanceHint(result.distance)
                     : "Unknown";
                 resultDisplay.innerText = `Noooo! 🚫 ${hint}`;
                 resultDisplay.className = "fail";
-                guessBtn.disabled = false; // 失敗時はボタンを復活
+                guessBtn.disabled = false;
             }
         } catch (err) {
+            // 通信エラー
             resultDisplay.innerText = err.name === 'AbortError' ? "CONNECTION TIMEOUT" : "TRANSMISSION FAILED";
             resultDisplay.className = "fail";
-            guessBtn.disabled = false; // エラー時もボタンを復活
+            guessBtn.disabled = false;
         } finally {
             submitGuess.locked = false;
         }

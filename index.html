@@ -4,7 +4,7 @@
     <meta name="robots" content="noindex,nofollow">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ddGuessr v0.3.3</title>
+    <title>ddGuessr v0.3.4</title>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:ital,wght@1,800&family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -667,7 +667,7 @@
     </div>
 
     <!-- WINNER INFO -->
-    <div class="winner-info">
+    <div class="winner-info" style="display:none">
         <div class="winner-count">SOLVED BY <span id="winnerCount">0</span> AGENTS</div>
         <div class="winner-list" id="winnerList"></div>
     </div>
@@ -948,12 +948,14 @@
             markSyncTime();
             setCachedQuizzes(quizList);
 
+            const changed = isBackground
+                ? JSON.stringify(quizList) !== JSON.stringify(quizData)
+                : false;
+
+            quizData = quizList;
+            updateProgress();
+
             if (isBackground) {
-                const changed = JSON.stringify(quizList) !== JSON.stringify(quizData);
-
-                quizData = quizList;
-                updateProgress();
-
                 if (changed) {
                     renderQuiz(Math.min(currentIndex, quizData.length - 1), true);
                     showCacheStatus('updated', '✓ UPDATED', 3000);
@@ -961,8 +963,6 @@
                     showCacheStatus('updated', '✓ UP TO DATE', 2000);
                 }
             } else {
-                quizData = quizList;
-                updateProgress();
                 renderQuiz(0);
             }
         } catch (err) {
@@ -987,6 +987,7 @@
 
         // URLが変わらない場合は、ロード完了を待たずに表示
         if (img.getAttribute('src') === newSrc) {
+            img.onload = img.onerror = null;
             spinner.classList.remove('active');
             img.style.opacity = 1;
         } else {

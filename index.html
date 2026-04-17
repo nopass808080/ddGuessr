@@ -4,7 +4,7 @@
     <meta name="robots" content="noindex,nofollow">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ddGuessr v0.2.3</title>
+    <title>ddGuessr v0.2.5</title>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:ital,wght@1,800&family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -950,18 +950,17 @@
             markSyncTime();
             setCachedQuizzes(quizList);
 
+            quizData = quizList;
+            updateProgress();
+
             if (isBackground) {
-                //const changed = JSON.stringify(quizList) !== JSON.stringify(quizData);
-                const changed = quizList[0]?.id !== quizData[0]?.id;
-                quizData = quizList;
-                updateProgress();
+                const changed = JSON.stringify(quizList) !== JSON.stringify(quizData);
+                //const changed = quizList[0]?.id !== quizData[0]?.id;
                 
                 if (changed) {
                     renderQuiz(Math.min(currentIndex, quizData.length - 1), true);
                     showCacheStatus('updated', '✓ UPDATED', 3000);
                 } else {
-                    // 変更なし：不要な再レンダリングをスキップ
-                    updateProgress();
                     showCacheStatus('updated', '✓ UP TO DATE', 2000);
                 }
             } else {

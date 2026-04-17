@@ -4,7 +4,7 @@
     <meta name="robots" content="noindex,nofollow">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ddGuessr v0.2.6</title>
+    <title>ddGuessr v0.2.8</title>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:ital,wght@1,800&family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -770,6 +770,8 @@
         const inputEl = document.getElementById('codename-setup-input');
         const val = inputEl.value.trim().toUpperCase();
         if (!val) return;
+        const err = document.getElementById('codename-setup-error');
+        if (err) err.remove();
         codename = val;
         setCodename(val, true); // skipSync=true: 直後に _fetchAndUpdate を自分で呼ぶため
         localStorage.setItem('dd_codename', val);
@@ -982,6 +984,7 @@
     function renderQuiz(index, preserveInput = false) {
         currentIndex = index;
         const quiz = quizData[index];
+        if (!quiz) return;
         const img = document.getElementById('quiz-image');
         const spinner = document.getElementById('img-spinner');
         const solved = isSolved(quiz.id);
@@ -1049,7 +1052,7 @@
         document.getElementById('winnerCount').innerText = count;
         const listEl = document.getElementById('winnerList');
         listEl.innerHTML = "";
-        if (quiz.recentWinners) {
+        if (Array.isArray(quiz.recentWinners)) {
             quiz.recentWinners.forEach(name => {
                 const span = document.createElement('span');
                 span.className = "winner-tag";
@@ -1118,6 +1121,8 @@
 
     // ── SUBMIT ──
     async function submitGuess() {
+        if (submitGuess.locked) return;
+
         if (!codename) {
             const setupEl = document.getElementById('codename-setup');
             setupEl.style.display = 'block';
@@ -1154,6 +1159,19 @@
             return;
         }
 
+        // 座標範囲チェック
+        const lat = parseFloat(coordInput.split(',')[0]);
+        const lng = parseFloat(coordInput.split(',')[1]);
+        if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+            coordsEl.classList.add('error');
+            resultDisplay.style.display = "block";
+            resultDisplay.className = "fail";
+            resultDisplay.innerText = "COORDINATES OUT OF RANGE";
+            return;
+        }
+
+        submitGuess.locked = true;
+
         resultDisplay.style.display = "block";
         resultDisplay.className = "";
         resultDisplay.innerText = "TRANSMITTING...";
@@ -1166,8 +1184,8 @@
             id: quizData[currentIndex].id,
             codename: codename,
             agentId: agentId,
-            lat: coordInput.split(',')[0].trim(),
-            lng: coordInput.split(',')[1].trim()
+            lat: lat,
+            lng: lng
         });
 
         try {
@@ -1210,6 +1228,8 @@
             resultDisplay.innerText = err.name === 'AbortError' ? "CONNECTION TIMEOUT" : "TRANSMISSION FAILED";
             resultDisplay.className = "fail";
             guessBtn.disabled = false; // エラー時もボタンを復活
+        } finally {
+            submitGuess.locked = false;
         }
     }
 

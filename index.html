@@ -4,7 +4,7 @@
     <meta name="robots" content="noindex,nofollow">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ddGuessr v0.1.8</title>
+    <title>ddGuessr v0.1.9</title>
     <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:ital,wght@1,800&family=Inter:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -718,7 +718,7 @@
         }
         const saved = localStorage.getItem('dd_codename');
         if (saved) {
-            setCodename(saved, true); // 初回復元時はスキップ、loadQuizzesで一緒に取得
+            setCodename(saved.toUpperCase(), true);
         }
         loadQuizzes();
 
@@ -727,25 +727,19 @@
             if (e.key === 'Enter') confirmCodename();
         });
 
+        // Enter key on coords input → submit
+        document.getElementById('coords').addEventListener('keydown', e => {
+            if (e.key === 'Enter') submitGuess();
+        });
+
         document.addEventListener('keydown', (e) => {
-            // セットアップ画面のinputは独自ハンドラに任せる
-            if (e.target.id === 'codename-setup-input') return;
-
-            // Escapeでミッションリストを閉じる
-            if (e.key === 'Escape') { closeMissionList(); return; }
-
-            // coords inputにフォーカス中はEnterのみ有効（矢印キーはテキスト編集に使う）
-            if (e.target.id === 'coords') {
-                if (e.key === 'Enter') submitGuess();
-                return;
-            }
-
-            // その他のinputでは何もしない
             if (e.target.tagName === 'INPUT') return;
 
-            if (e.key === 'ArrowLeft') changeQuiz(-1);
-            else if (e.key === 'ArrowRight') changeQuiz(1);
-            else if (e.key === 'Enter') submitGuess();
+            if (e.key === 'ArrowLeft') {
+                changeQuiz(-1);
+            } else if (e.key === 'ArrowRight') {
+                changeQuiz(1);
+            }
         });
 
     };
@@ -755,17 +749,9 @@
         const inputEl = document.getElementById('codename-setup-input');
         const val = inputEl.value.trim().toUpperCase();
         if (!val) return;
-        
-        // agentName ではなく定義済みの codename を使用
-        codename = val; 
+        codename = val;
         setCodename(val);
         localStorage.setItem('dd_codename', val);
-        
-        // IDが間違っていたので修正
-        const setupEl = document.getElementById('codename-setup');
-        if (setupEl) {
-            setupEl.style.display = 'none';
-        }
         _fetchAndUpdate(true); // 確定直後に同期を実行
     }
 
@@ -867,7 +853,8 @@
     function syncSolvedIds(serverIds) {
         if (serverIds === null || serverIds === undefined) return;
         if (!Array.isArray(serverIds)) return;
-        // [] も「正解0件」として正当な上書き（null と区別する）
+        // 空配列はサーバー未対応 or 取得エラーとみなしてローカルを保護する
+        if (serverIds.length === 0) return;
         localStorage.setItem('dd_solved', JSON.stringify(serverIds.map(String)));
     }
 
@@ -945,15 +932,16 @@
             setCachedQuizzes(quizList);
 
             if (isBackground) {
-                const changed = JSON.stringify(quizList) !== JSON.stringify(quizData);
+                //const changed = JSON.stringify(quizList) !== JSON.stringify(quizData);
+                const changed = quizList[0]?.id !== quizData[0]?.id;
                 quizData = quizList;
                 updateProgress();
                 
                 if (changed) {
-                    renderQuiz(Math.min(currentIndex, quizData.length - 1));
+                    renderQuiz(Math.min(currentIndex, quizData.length - 1), true);
                     showCacheStatus('updated', '✓ UPDATED', 3000);
                 } else {
-                    renderQuiz(currentIndex);
+                    renderQuiz(currentIndex, true);
                     showCacheStatus('updated', '✓ UP TO DATE', 2000);
                 }
             } else {
@@ -972,7 +960,7 @@
     }
 
     // ── RENDER QUIZ ──
-    function renderQuiz(index) {
+    function renderQuiz(index, preserveInput = false) {
         currentIndex = index;
         const quiz = quizData[index];
         const img = document.getElementById('quiz-image');
@@ -1000,8 +988,8 @@
         const guessBtn = document.getElementById('guess-btn');
         const resultDisplay = document.getElementById('result-display');
 
-        coordsEl.value = "";
         coordsEl.classList.remove('error');
+        if (!preserveInput) coordsEl.value = "";
 
         if (solved) {
             coordsEl.disabled = true;
@@ -1032,7 +1020,14 @@
     }
 
     function updateWinnerDisplay(quiz) {
-        document.getElementById('winnerCount').innerText = quiz.winnerCount || 0;
+        const count = quiz.winnerCount || 0;
+        const winnerInfo = document.querySelector('.winner-info');
+        if (count === 0) {
+            winnerInfo.style.display = 'none';
+            return;
+        }
+        winnerInfo.style.display = '';
+        document.getElementById('winnerCount').innerText = count;
         const listEl = document.getElementById('winnerList');
         listEl.innerHTML = "";
         if (quiz.recentWinners) {
@@ -1103,6 +1098,10 @@
         if (!codename) {
             document.getElementById('codename-setup').style.display = 'block';
             document.getElementById('codename-setup-input').focus();
+            const resultDisplay = document.getElementById('result-display');
+            resultDisplay.style.display = "block";
+            resultDisplay.className = "fail";
+            resultDisplay.innerText = "CODENAME REQUIRED";
             return;
         }
 
@@ -1129,8 +1128,11 @@
         resultDisplay.className = "";
         resultDisplay.innerText = "TRANSMITTING...";
 
+        const guessBtn = document.getElementById('guess-btn');
+        guessBtn.disabled = true; // 送信中は連打防止
+
         const params = new URLSearchParams({
-            action: 'submitGuess', // GAS側で doGuess と判定させるためのフラグ（任意）
+            action: 'submitGuess',
             id: quizData[currentIndex].id,
             codename: codename,
             agentId: agentId,
@@ -1151,11 +1153,9 @@
                 updateProgress();
                 document.getElementById('solved-overlay').classList.add('visible');
 
-                // ③ 正解時に即ボタン・input をロック
+                // 正解時にボタン・input をロック
                 coordsEl.disabled = true;
                 coordsEl.placeholder = "LAT,LNG";
-                const guessBtn = document.getElementById('guess-btn');
-                guessBtn.disabled = true;
                 guessBtn.classList.add('cleared');
                 guessBtn.innerText = "ALREADY CLEARED";
 
@@ -1172,17 +1172,18 @@
                     : "Unknown";
                 resultDisplay.innerText = `Noooo! 🚫 ${hint}`;
                 resultDisplay.className = "fail";
+                guessBtn.disabled = false; // 失敗時はボタンを復活
             }
         } catch (err) {
             resultDisplay.innerText = err.name === 'AbortError' ? "CONNECTION TIMEOUT" : "TRANSMISSION FAILED";
             resultDisplay.className = "fail";
+            guessBtn.disabled = false; // エラー時もボタンを復活
         }
     }
 
     function getDistanceHint(d) {
         if (d > 500) return "More than 500m away.";
         if (d > 250) return "More than 250m away.";
-        return "Less than 250m away. Getting close!";
     }
 
     // ── MISSION LIST ──

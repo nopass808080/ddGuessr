@@ -73,6 +73,22 @@
             gap: 10px;
         }
 
+        h1 a {
+            text-decoration: none;
+            color: inherit;
+            display: inline-block;
+        }
+
+        .version-tag {
+            font-family: var(--mono);
+            font-size: 0.6rem;
+            color: var(--text-dim);
+            opacity: 0.6;
+            text-align: right;
+            margin-bottom: 2px;
+            letter-spacing: 1px;
+        }
+
         h1 {
             margin: 0;
             font-family: 'Exo 2', sans-serif;
@@ -628,8 +644,13 @@
             </div>
         </div>
         <div id="header-left-placeholder"></div>
-        <h1>ddGuessr</h1>
-        <button class="list-btn" onclick="openMissionList()" id="list-toggle-btn">≡ MISSIONS</button>
+        
+        <h1><a href="https://nopass808080.github.io/ddGuessr/">ddGuessr</a></h1>
+
+        <div style="justify-self: end; display: flex; flex-direction: column; align-items: flex-end;">
+            <div class="version-tag">v0.3.5</div>
+            <button class="list-btn" onclick="openMissionList()" id="list-toggle-btn">≡ MISSIONS</button>
+        </div>
     </header>
 
     <!-- CODENAME SETUP -->
